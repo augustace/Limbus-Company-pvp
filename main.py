@@ -60,7 +60,7 @@ class Character:
 
     #Aim target of the action for the turn
     def target(self, targ, skill_choice):
-        print(f"{self.name} targets {targ.name} with skill {self.skillcycle[skill_choice - 1]} by speed of {self.sp}.")
+        print(f"{self.name} targets {targ.name} with skill S{skill_choice} by speed of {self.sp}.")
         if targ.name == "Mephistopheles":
             return 1
         elif self.sp > targ.sp:
@@ -322,6 +322,9 @@ def damage(attacker, attack_skill, defender, coin_lost):
         time.sleep(0.5)
         if not defender.is_alive():
             coin_count = 0
+            if defender.name == "Mephistopheles":
+                print(f"Game is over.")
+                quit()
 
 def clash(attacker, attack_skill, defender, defend_skill):
     clash_num = 0
@@ -452,11 +455,10 @@ def main():
                 target_choice = get_player_target(attacking_character, enemy_characters)
                 target_character = enemy_characters[target_choice]
                 clash_opt = attacking_character.target(target_character, skill_choice)
-                skillnum = attacking_character.skillcycle[0]
                 skill = attacking_character.s1
-                if skillnum == 2:
+                if skill_choice == 2:
                     skill = attacking_character.s2
-                elif skillnum == 3:
+                elif skill_choice == 3:
                     skill = attacking_character.s3
                 action = Action(attacking_character.sp, skill, attacking_character, target_character, clash_opt)
                 add_action(action)
@@ -516,8 +518,6 @@ def main():
                         time.sleep(0.5)
                         damage(attack_action.att, attack_action.skill, attack_action.defn, 0)
                         time.sleep(0.5)
-                    if attack_action.defn.name == "Mephistopheles":
-                        check_game_end(p1team, p1name, p2team, p2name)
                     del action_list[0]
                 else:
                     print(f"{attack_action.att.name} begin clash against {attack_action.defn.name}")
@@ -533,8 +533,6 @@ def main():
                     else:
                         print(f"{attack_action.defn.name} is already dead")
                         time.sleep(0.5)
-                    if attack_action.defn.name == "Mephistopheles":
-                        check_game_end(p1team, p1name, p2team, p2name)
                     del action_list[0]
             else:
                 if attack_action.defn.is_alive():
@@ -544,8 +542,6 @@ def main():
                     time.sleep(0.5)
                 else:
                     print(f"{attack_action.defn.name} is already dead")
-                if attack_action.defn.name == "Mephistopheles":
-                    check_game_end(p1team, p1name, p2team, p2name)
                 del action_list[0]
 
 if __name__ == "__main__":
