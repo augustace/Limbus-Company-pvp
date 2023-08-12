@@ -25,15 +25,14 @@ class SkillType(Enum):
 
 class ActionType(Enum):
     ONESIDE = 1
-    CLASH = 2   
-
+    CLASH = 2
 
 @dataclass(unsafe_hash=True)
 class Resistance:
     slash: float
     pierce: float
     bash: float
-    def from_type(self, skill_type: SkillType) -> float:
+    def of_type(self, skill_type: SkillType) -> float:
         if skill_type == SkillType.SLASH:
             return self.slash
         if skill_type == SkillType.PIERCE:
@@ -102,7 +101,7 @@ class Character:
     def find_mult(self, skill_type:SkillType) -> float:
         if self.is_stagger():
             return 2
-        return self.resistance.from_type(skill_type)
+        return self.resistance.of_type(skill_type)
     
     #Taking one direction damage
     def take_damage(self, damage: int):
@@ -140,12 +139,22 @@ class Character:
             return ActionType.CLASH
         return ActionType.ONESIDE
     
+    def __repr__(self) -> str:
+        if self.is_alive():
+            if self.is_stagger():
+                return f"{self.name} is staggered \n (Speed: 0, Sanity: {self.sanity}, Stagger: {self.curstag}/{self.maxstag}, Health: {self.curhp}/{self.maxhp})"
+            return f"{self.name} \n (Speed: {self.speed}, Sanity: {self.sanity}, Skill: (S{self.skillcycle[0]}/S{self.skillcycle[1]}), Stagger: {self.curstag}/{self.maxstag}, Health: {self.curhp}/{self.maxhp})"
+        return f"{self.name} will revive in {self.deathtimer} acts. (Health: 0/{self.maxhp}) (Stagger: 0/{self.maxstag})"
+    
 class BusCharacter(Character):
     def __init__(self):
         super().__init__("Mephistopheles", 50, 100, 0, assign_skillcycle(), 0, 0, Resistance(1, 1, 1), (Skill(0,0,0,"slash"), Skill(0,0,0,"slash"), Skill(0,0,0,"slash")))
 
     def next_turn(self):
         pass
+
+    def __repr__(self) -> str:
+        return f"{self.name} (Health: {self.curhp}/{self.maxhp})"
     
 class Team:
     def __init__(self, name: str, characters: list[Character]):
@@ -156,14 +165,9 @@ class Team:
         ret_str = f"{self.name}'s Team"
         for char in self.characters:
             if isinstance(char, BusCharacter):
-                ret_str += f"\n{self.name}'s {char.name} (Health: {char.curhp}/{char.maxhp})"
-            elif char.is_alive():
-                if char.is_stagger():
-                    ret_str += f"\n{char.name} is staggered \n (Speed: 0, Sanity: {char.sanity}, Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})"
-                else:
-                    ret_str += f"\n{char.name} \n (Speed: {char.speed}, Sanity: {char.sanity}, Skill: (S{char.skillcycle[0]}/S{char.skillcycle[1]}), Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})"
+                ret_str += f"\n{self.name}'s {char})"
             else:
-                ret_str += f"\n{char.name} will revive in {char.deathtimer} acts. (Health: 0/{char.maxhp}) (Stagger: 0/{char.maxstag})"
+                ret_str += f"\n{char}"
         return ret_str
 
 @dataclass
@@ -212,7 +216,7 @@ def get_player_input(characters: list[Character]):
             elif not characters[choice].is_alive():
                 print("Invalid input. The character can't make an action")
             elif characters[choice].is_stagger():
-                print("Invalid input. The character is staggered")                
+                print("Invalid input. The character is staggered")
             elif choice == 0:
                 print("Invalid choice, Mephistopheles can't make an action")
             else:
