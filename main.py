@@ -4,6 +4,7 @@ import sys
 import time
 from enum import Enum
 from dataclasses import dataclass
+from itertools import chain
 
 SkillTuple = tuple["Skill", "Skill", "Skill"]
 
@@ -53,7 +54,7 @@ class Character:
             spmax: int,
             resistance: Resistance,
             skills: SkillTuple
-            ):
+        ):
         self.name = name
         self.maxhp = maxhp
         self.curhp = maxhp
@@ -85,6 +86,17 @@ class Character:
     
     def is_stagger(self):
         return self.curstag < 1
+
+    def next_turn(self):
+        self.set_speed()
+        if self.deathtimer > 0:
+            self.deathtimer -= 1
+        if self.deathtimer == 0:
+            self.curhp = self.maxhp
+        if self.staggertimer > 0:
+            self.staggertimer -= 1
+        if self.staggertimer == 0:
+            self.curstag = self.maxstag
     
     #Damage multiplier
     def find_mult(self, skill_type:SkillType) -> float:
@@ -107,7 +119,7 @@ class Character:
     #Aim target of the action for the turn
     def target(self, targ: Character, skill_choice: int) -> ActionType:
         print(f"{self.name} targets {targ.name} with skill S{skill_choice} by speed of {self.speed}.")
-        if targ.name == "Mephistopheles":
+        if isinstance(targ, BusCharacter):
             return ActionType.ONESIDE
         if self.speed > targ.speed:
             if targ.is_stagger():
@@ -127,6 +139,32 @@ class Character:
                 return ActionType.ONESIDE
             return ActionType.CLASH
         return ActionType.ONESIDE
+    
+class BusCharacter(Character):
+    def __init__(self):
+        super().__init__("Mephistopheles", 50, 100, 0, assign_skillcycle(), 0, 0, Resistance(1, 1, 1), (Skill(0,0,0,"slash"), Skill(0,0,0,"slash"), Skill(0,0,0,"slash")))
+
+    def next_turn(self):
+        pass
+    
+class Team:
+    def __init__(self, name: str, characters: list[Character]):
+        self.name = name
+        self.characters = characters
+
+    def __repr__(self) -> str:
+        ret_str = f"{self.name}'s Team"
+        for char in self.characters:
+            if isinstance(char, BusCharacter):
+                ret_str += f"\n{self.name}'s {char.name} (Health: {char.curhp}/{char.maxhp})"
+            elif char.is_alive():
+                if char.is_stagger():
+                    ret_str += f"\n{char.name} is staggered \n (Speed: 0, Sanity: {char.sanity}, Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})"
+                else:
+                    ret_str += f"\n{char.name} \n (Speed: {char.speed}, Sanity: {char.sanity}, Skill: (S{char.skillcycle[0]}/S{char.skillcycle[1]}), Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})"
+            else:
+                ret_str += f"\n{char.name} will revive in {char.deathtimer} acts. (Health: 0/{char.maxhp}) (Stagger: 0/{char.maxstag})"
+        return ret_str
 
 @dataclass
 class Action:
@@ -157,7 +195,7 @@ def assign_skillcycle():
 def get_player_input(characters: list[Character]):
     print("Choose which character to make an action:")
     for i, character in enumerate(characters, 1):
-        if character.name == "Mephistopheles":
+        if isinstance(character, BusCharacter):
             continue
         if character.is_stagger():
             print(f"{i-1}. {character.name} is staggered")
@@ -186,7 +224,7 @@ def get_player_input(characters: list[Character]):
 def get_player_target(att_char: Character, enemy_chars: list[Character]):
     print(f"Choose which character for {att_char.name} to attack with speed of {att_char.speed}")
     for i, character in enumerate(enemy_chars, 1):
-        if character.name == "Mephistopheles":
+        if isinstance(character, BusCharacter):
             print(f"{i-1}. {character.name} (Health: {character.curhp})")
         elif character.is_alive():
             print(f"{i-1}. {character.name} (Speed: {character.speed})")
@@ -250,7 +288,7 @@ def get_valid_input(prompt, valid_choices: list[int]):
 
 def numbers_to_characters(number_list: list[int]):
     character_mapping = {
-        0: Character("Mephistopheles", 50, 100, 0, assign_skillcycle(), 0, 0, Resistance(1, 1, 1), (Skill(0,0,0,"slash"), Skill(0,0,0,"slash"), Skill(0,0,0,"slash"))),
+        0: BusCharacter(),
         1: Character("Yisang", 159, 24, 0, assign_skillcycle(), 4, 8, Resistance(2, 0.5, 1), (Skill(4, 1, 7, "slash"), Skill(4, 2, 4, "pierce"), Skill(6, 3, 2, "slash"))),
         2: Character("Faust", 186, 28, 0, assign_skillcycle(), 2, 4, Resistance(2, 0.5, 1), (Skill(4, 1, 7, "bash"), Skill(5, 2, 4, "bash"), Skill(7, 2, 2, "pierce"))),
         3: Character("Don Quixote", 146, 29, 0, assign_skillcycle(), 3, 6, Resistance(1, 0.5, 2), (Skill(4, 1, 7, "pierce"), Skill(4, 1, 12, "pierce"), Skill(3, 3, 3, "pierce"))),
@@ -268,33 +306,13 @@ def numbers_to_characters(number_list: list[int]):
     character_list = [character_mapping[number] for number in number_list]
     return character_list
 
-def print_board(actnum: int, p1name: str, p1team: list[Character], p2name: str, p2team: list[Character]):
+def print_board(actnum: int, p1team: Team, p2team: Team):
     print("\n" + "=" * 40)
     print(f"Act {actnum}")
     print("=" * 10)
-    print(p1name + "'s Team")
-    for i, char in enumerate(p1team, 1):
-        if char.name == "Mephistopheles":
-            print(f"{p1name}'s {char.name} (Health: {char.curhp}/{char.maxhp})")
-        elif char.is_alive():
-            if char.is_stagger():
-                print(f"{char.name} is staggered \n (Speed: 0, Sanity: {char.sanity}, Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})")
-            else:
-                print(f"{char.name} \n (Speed: {char.speed}, Sanity: {char.sanity}, Skill: (S{char.skillcycle[0]}/S{char.skillcycle[1]}), Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})")
-        else:
-            print(f"{char.name} will revive in {char.deathtimer} acts. (Health: 0/{char.maxhp}) (Stagger: 0/{char.maxstag})")
+    print(p1team)
     print("=" * 10)
-    print(p2name + "'s Team")
-    for i, char in enumerate(p2team, 1):
-        if char.name == "Mephistopheles":
-            print(f"{p2name}'s {char.name} (Health: {char.curhp}/{char.maxhp})")
-        elif char.is_alive():
-            if char.is_stagger():
-                print(f"{char.name} is staggered \n (Speed: 0, Sanity: {char.sanity}, Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})")
-            else:
-                print(f"{char.name} \n (Speed: {char.speed}, Sanity: {char.sanity}, Skill: (S{char.skillcycle[0]}/S{char.skillcycle[1]}), Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})")
-        else:
-            print(f"{char.name} will revive in {char.deathtimer} acts. (Health: 0/{char.maxhp}) (Stagger: 0/{char.maxstag})")
+    print(p2team)
     print("=" * 40)
 
 action_list: list[Action] = []
@@ -325,7 +343,7 @@ def remove_all_actions():
     global action_list
     action_list = []
 
-def find_and_remove_action_by_att(defender):
+def find_and_remove_action_by_att(defender: Character):
     global action_list
     found_action = None
     
@@ -362,7 +380,7 @@ def calculate_damage(attacker: Character, attack_skill: Skill, defender: Charact
         time.sleep(0.5)
         if not defender.is_alive():
             coin_count = 0
-            if defender.name == "Mephistopheles":
+            if isinstance(defender, BusCharacter):
                 print(f"Game is over.")
                 sys.exit()
 
@@ -419,6 +437,31 @@ def clash(attacker: Character, attack_skill: Skill, defender: Character, defend_
         time.sleep(0.5)
         calculate_damage(defender, defend_skill, attacker, defn_coin_lost)
 
+def turn_action(act: int, player: Team, enemy: Team):
+    print_board(act, player, enemy)
+    print(f"{player.name}, it's your turn.")
+    turn_end = False
+    while not turn_end:
+        user_input = input("What do you want to do? Press 0 to make action, 1 to see the board, 2 to end turn, q to quit the game: ")
+        if user_input == "0":
+            player_choice = get_player_input(player.characters)
+            attacking_character = player.characters[player_choice]
+            skill_choice = get_skill_choice(attacking_character)
+            target_choice = get_player_target(attacking_character, enemy.characters)
+            target_character = enemy.characters[target_choice]
+            clash_opt = attacking_character.target(target_character, skill_choice)
+            skill = attacking_character.skills[skill_choice - 1]
+            action = Action(attacking_character.speed, skill, attacking_character, target_character, clash_opt)
+            add_action(action)
+        elif user_input == "1":
+            print_board(act, player, enemy)
+        elif user_input == "2":
+            turn_end = True
+        elif user_input == "q":
+            sys.exit()
+        else:
+            print("Invalid Input")
+
 def main():
     # Get the player name and create a team of limbus ID to defend mephistopheles 
     print("Welcome to the Limbus Company pvp battle")
@@ -432,119 +475,36 @@ def main():
     all_numbers = list(range(1, 13))
     chosen_numbers = []
     for _ in range(6):
-        if len(chosen_numbers) == 0 or len(chosen_numbers) == 3 or len(chosen_numbers) == 4:
+        if len(chosen_numbers) in (0, 3, 4):
             prompt = f"{p1name}, pick a number from 1 to 12 to add to your team: "
-        if len(chosen_numbers) == 1 or len(chosen_numbers) == 2 or len(chosen_numbers) == 5:
+        if len(chosen_numbers) in (1, 2, 5):
             prompt = f"{p2name}, pick a number from 1 to 12 to add to your team: "
         valid_choices = [num for num in all_numbers if num not in chosen_numbers]
         choice = get_valid_input(prompt, valid_choices)
         chosen_numbers.append(choice)
     list1 = [0, chosen_numbers[0], chosen_numbers[3], chosen_numbers[4]]
     list2 = [0, chosen_numbers[1], chosen_numbers[2], chosen_numbers[5]]
-    p1team = numbers_to_characters(list1)
-    p2team = numbers_to_characters(list2)
+    p1team = Team(p1name, numbers_to_characters(list1))
+    p2team = Team(p2name, numbers_to_characters(list2))
     
     act = 0
     current_player = 1
     while True:
         act += 1
-        player_name = p1name
-        player_characters = p1team
-        enemy_name = p2name
-        enemy_characters = p2team
-        for k in [1,2,3]:
-            character = p1team[k]
-            character.set_speed()
-            if character.deathtimer > 0:
-                if character.deathtimer == 1:
-                    character.deathtimer = 0
-                    character.curhp = character.maxhp
-                else:
-                    character.deathtimer -= 1
-            if character.staggertimer > 0:
-                if character.staggertimer == 1:
-                    character.staggertimer = 0
-                    character.curstag = character.maxstag
-                else:
-                    character.staggertimer -= 1        
-            character = p2team[k]
-            character.set_speed()
-            if character.deathtimer > 0:
-                if character.deathtimer == 1:
-                    character.deathtimer = 0
-                    character.curhp = character.maxhp
-                else:
-                    character.deathtimer -= 1
-            if character.staggertimer > 0:
-                if character.staggertimer == 1:
-                    character.staggertimer = 0
-                    character.curstag = character.maxstag
-                else:
-                    character.staggertimer -= 1   
+        for character in chain(p1team.characters, p2team.characters):
+            character.next_turn()
         #Reduce death timer and bring back alive
 
-        print_board(act, player_name, player_characters, enemy_name, enemy_characters)
-        print(f"{player_name}, it's your turn.")
-        turn_end = False
-        while turn_end == False:
-            user_input = input(f"What do you want to do? Press 0 to make action, 1 to see the board, 2 to end turn, q to quit the game: ")
-            if user_input == "0":
-                player_choice = get_player_input(player_characters)
-                attacking_character = player_characters[player_choice]
-                skill_choice = get_skill_choice(attacking_character)
-                target_choice = get_player_target(attacking_character, enemy_characters)
-                target_character = enemy_characters[target_choice]
-                clash_opt = attacking_character.target(target_character, skill_choice)
-                skill = attacking_character.skills[skill_choice - 1]
-                action = Action(attacking_character.speed, skill, attacking_character, target_character, clash_opt)
-                add_action(action)
-            elif user_input == "1":
-                print_board(act, player_name, player_characters, enemy_name, enemy_characters)
-            elif user_input == "2":
-                turn_end = True
-            elif user_input == "q":
-                quit()
-            else:
-                print(f"Invalid Input")
-
-        # Switch player turns
-        player_name = p2name
-        player_characters = p2team
-        enemy_name = p1name
-        enemy_characters = p1team
-
         # Get player input and perform the attack
-
-        print_board(act, player_name, player_characters, enemy_name, enemy_characters)
-        print(f"{player_name}, it's your turn.")
-        turn_end = False
-        while turn_end == False:
-            user_input = input(f"What do you want to do? Press 0 to make action, 1 to see the board, 2 to end turn: ")
-            if user_input == "0":
-                player_choice = get_player_input(player_characters)
-                attacking_character = player_characters[player_choice]
-                skill_choice = get_skill_choice(attacking_character)
-                target_choice = get_player_target(attacking_character, enemy_characters)
-                target_character = enemy_characters[target_choice]
-                clash_opt = attacking_character.target(target_character, skill_choice)
-                skill = attacking_character.skills[skill_choice - 1]
-                action = Action(attacking_character.speed, skill, attacking_character, target_character, clash_opt)
-                add_action(action)
-            elif user_input == "1":
-                print_board(act, player_name, player_characters, enemy_name, enemy_characters)
-            elif user_input == "2":
-                turn_end = True
-            elif user_input == "q":
-                quit()
-            else:
-                print(f"Invalid Input")
+        turn_action(act, p1team, p2team)
+        turn_action(act, p2team, p1team)
 
         # Start the battle phase
         while len(action_list) > 0:
             attack_action = action_list[0]
-            if attack_action.act_type == 2:
+            if attack_action.act_type == ActionType.CLASH:
                 defend_action = find_and_remove_action_by_att(attack_action.defn)
-                if defend_action == None:
+                if defend_action is None:
                     if attack_action.defn.is_alive():
                         print(f"{attack_action.att.name} is attacking {attack_action.defn.name} one-sided")
                         time.sleep(0.5)
