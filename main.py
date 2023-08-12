@@ -63,6 +63,16 @@ class Character:
         self.deathtimer: int = 0
         self.staggertimer: int = 0
 
+    def stagger(self):
+        print(f"{self.name} is staggered!")
+        self.staggertimer = 2
+
+    def die(self):
+        print(f"{self.name} is dead!")
+        self.deathtimer = 3
+
+
+
     def set_speed(self):
         self.speed = random.randint(self.spmin, self.spmax)
 
@@ -85,12 +95,10 @@ class Character:
             self.curstag -= damage
         if self.curstag < 0:
             self.curstag = 0
-            print(f"{self.name} is staggered!")
-            self.staggertimer = 2
+            self.stagger()
         if self.curhp < 0:
             self.curhp = 0
-            print(f"{self.name} is dead!")
-            self.deathtimer = 3
+            self.die()
 
     #Aim target of the action for the turn
     def target(self, targ, skill_choice):
