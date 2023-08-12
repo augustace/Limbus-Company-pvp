@@ -1,10 +1,53 @@
 import random
 import sys
 import time
+from enum import Enum
+from dataclasses import dataclass
+
+SkillTuple = tuple["Skill", "Skill", "Skill"]
+
+class SkillType(Enum):
+    SLASH = 1
+    PIERCE = 2
+    BASH = 3
+    @staticmethod
+    def from_str(typetext: str):
+        typetext = typetext.capitalize()
+        if typetext == "SLASH":
+            return SkillType.SLASH
+        if typetext == "PIERCE":
+            return SkillType.PIERCE
+        if typetext == "BASH":
+            return SkillType.BASH
+        raise NameError
+
+@dataclass(unsafe_hash=True)
+class Resistance:
+    slash: float
+    pierce: float
+    bash: float
+    def from_type(self, skill_type: SkillType) -> float:
+        if skill_type == SkillType.SLASH:
+            return self.slash
+        if skill_type == SkillType.PIERCE:
+            return self.pierce
+        return self.bash
+
 
 #Class with all informations of ID
 class Character:
-    def __init__(self, name, maxhp, maxstag, sanity, skillcycle, spmin, spmax, smult, pmult, bmult, s1, s2, s3):
+    def __init__(
+            self,
+            name:str,
+            maxhp:int,
+            maxstag:int,
+            sanity: int,
+            skillcycle: list[int],
+            spmin: int,
+            spmax: int,
+            resistance: Resistance,
+            skills: SkillTuple
+            ):
         self.name = name
         self.maxhp = maxhp
         self.curhp = maxhp
@@ -14,18 +57,14 @@ class Character:
         self.skillcycle = skillcycle
         self.spmin = spmin
         self.spmax = spmax
-        self.sp = 0
-        self.smult = smult
-        self.pmult = pmult
-        self.bmult = bmult
-        self.s1 = s1
-        self.s2 = s2
-        self.s3 = s3
-        self.deathtimer = 0
-        self.staggertimer = 0
+        self.speed: int = 0
+        self.resistance = resistance
+        self.skills = skills
+        self.deathtimer: int = 0
+        self.staggertimer: int = 0
 
     def set_speed(self):
-        self.sp = random.randint(self.spmin, self.spmax)
+        self.speed = random.randint(self.spmin, self.spmax)
 
     def is_alive(self):
         return self.curhp > 0
@@ -34,20 +73,15 @@ class Character:
         return self.curstag < 1
     
     #Damage multiplier
-    def find_mult(self, skill_type):
+    def find_mult(self, skill_type:SkillType) -> float:
         if self.is_stagger():
             return 2
-        elif skill_type == "slash":
-            return self.smult
-        elif skill_type == "pierce":
-            return self.pmult
-        else:
-            return self.bmult
+        return self.resistance.from_type(skill_type)
     
     #Taking one direction damage
-    def take_damage(self, damage):
+    def take_damage(self, damage: int):
         self.curhp -= damage
-        if not self.curstag == 0: 
+        if self.curstag != 0:
             self.curstag -= damage
         if self.curstag < 0:
             self.curstag = 0
@@ -60,10 +94,10 @@ class Character:
 
     #Aim target of the action for the turn
     def target(self, targ, skill_choice):
-        print(f"{self.name} targets {targ.name} with skill S{skill_choice} by speed of {self.sp}.")
+        print(f"{self.name} targets {targ.name} with skill S{skill_choice} by speed of {self.speed}.")
         if targ.name == "Mephistopheles":
             return 1
-        elif self.sp > targ.sp:
+        elif self.speed > targ.sp:
             if targ.is_stagger():
                 return 1
             else:
@@ -83,23 +117,27 @@ class Character:
             return 1
 
 class Action:
-    def __init__(self, speed, skill, att, defn, act_type):
+    def __init__(self, speed, skill, att, defn, act_type: str | SkillType):
         self.speed = speed
         self.skill = skill
         self.att = att
         self.defn = defn
-        self.act_type = act_type
+        self.act_type: SkillType
+        if isinstance(act_type, SkillType):
+            self.act_type = act_type
+        else:
+            self.act_type = SkillType.from_str(act_type)
     def __repr__(self):
         return f"Action(speed={self.speed}, skill='{self.skill.type}', attacker={self.att.name}, defender={self.defn.name}, type={self.act_type})"
 
 class Skill:
-    def __init__(self, baseval, coinnum, coinval, type):
+    def __init__(self, baseval, coinnum, coinval, skill_type:SkillType):
         self.baseval = baseval
         self.coinnum = coinnum
         self.coinval = coinval
-        self.type = type
+        self.type = skill_type
 
-# Roll the skill cycle at the start of character init 
+# Roll the skill cycle at the start of character init
 def assign_skillcycle():
     integer_list = [1, 1, 1, 2, 2, 3]
     random.shuffle(integer_list)
@@ -157,21 +195,13 @@ def get_player_target(att_char, enemy_chars):
             print("Invalid input. Please enter a valid integer.")
     return choice
 
-def get_skill_choice(character):
+def get_skill_choice(character: Character) -> int:
     print(f"Which skill do you want {character.name} to use?")
-    skillnum1 = character.skillcycle[0]
-    skill1 = character.s1
-    if skillnum1 == 2:
-        skill1 = character.s2
-    elif skillnum1 == 3:
-        skill1 = character.s3
+    skillnum1:int = character.skillcycle[0]
+    skill1 = character.skills[skillnum1 - 1]
     print(f"1: S{skillnum1}, {skill1.baseval}+{skill1.coinval}*{skill1.coinnum}, Type: {skill1.type}")
-    skillnum2 = character.skillcycle[1]
-    skill2 = character.s1
-    if skillnum2 == 2:
-        skill2 = character.s2
-    elif skillnum2 == 3:
-        skill2 = character.s3
+    skillnum2:int = character.skillcycle[1]
+    skill2 = character.skills[skillnum2 - 1]
     print(f"2: S{skillnum2}, {skill2.baseval}+{skill2.coinval}*{skill2.coinnum}, Type: {skill2.type}")
     choice = 0
     while True:
@@ -210,19 +240,19 @@ def get_valid_input(prompt, valid_choices):
 
 def numbers_to_characters(number_list):
     character_mapping = {
-        0: Character("Mephistopheles", 50, 100, 0, assign_skillcycle(), 0, 0, 1, 1, 1, Skill(0,0,0,"slash"), Skill(0,0,0,"slash"), Skill(0,0,0,"slash")),
-        1: Character("Yisang", 159, 24, 0, assign_skillcycle(), 4, 8, 2, 0.5, 1, Skill(4, 1, 7, "slash"), Skill(4, 2, 4, "pierce"), Skill(6, 3, 2, "slash")),
-        2: Character("Faust", 186, 28, 0, assign_skillcycle(), 2, 4, 2, 0.5, 1, Skill(4, 1, 7, "bash"), Skill(5, 2, 4, "bash"), Skill(7, 2, 2, "pierce")),
-        3: Character("Don Quixote", 146, 29, 0, assign_skillcycle(), 3, 6, 1, 0.5, 2, Skill(4, 1, 7, "pierce"), Skill(4, 1, 12, "pierce"), Skill(3, 3, 3, "pierce")),
-        4: Character("Ryoshu", 146, 29, 0, assign_skillcycle(), 3, 6, 0.5, 1, 2, Skill(4, 1, 7, "slash"), Skill(4, 2, 5, "slash"), Skill(5, 3, 3, "slash")),
-        5: Character("Meursault", 199, 40, 0, assign_skillcycle(), 2, 3, 1, 2, 0.5, Skill(3, 2, 4, "bash"), Skill(6, 1, 9, "bash"), Skill(4, 4, 2, "bash")),
-        6: Character("Honglu", 146, 29, 0, assign_skillcycle(), 3, 6, 2, 1, 0.5, Skill(4, 1, 7, "bash"), Skill(4, 2, 4, "slash"), Skill(6, 2, 4, "bash")),
-        7: Character("Heathcliff", 171, 26, 0, assign_skillcycle(), 2, 5, 2, 1, 0.5, Skill(4, 1, 7, "bash"), Skill(4, 2, 4, "bash"), Skill(4, 2, 8, "bash")),
-        8: Character("Ishmael", 172, 50, 0, assign_skillcycle(), 5, 8, 2, 1, 0.5, Skill(4, 1, 7, "bash"), Skill(6, 1, 9, "bash"), Skill(8, 1, 12, "bash")),
-        9: Character("Rodion", 172, 26, 0, assign_skillcycle(), 2, 5, 0.5, 2, 1, Skill(4, 1, 7, "slash"), Skill(4, 2, 4, "slash"), Skill(4, 4, 2, "slash")),
-        10: Character("Sinclair", 132, 26, 0, assign_skillcycle(), 3, 7, 0.5, 2, 1, Skill(4, 1, 7, "slash"), Skill(4, 3, 2, "slash"), Skill(5, 3, 3, "slash")),
-        11: Character("Outis", 132, 26, 0, assign_skillcycle(), 3, 7, 0.5, 1, 2, Skill(3, 3, 2, "pierce"), Skill(5, 2, 4, "slash"), Skill(7, 1, 14, "pierce")),
-        12: Character("Gregor", 158, 47, 0, assign_skillcycle(), 3, 7, 1, 0.5, 2, Skill(4, 1, 7, "slash"), Skill(5, 1, 10, "pierce"), Skill(6, 2, 4, "pierce")),
+        0: Character("Mephistopheles", 50, 100, 0, assign_skillcycle(), 0, 0, Resistance(1, 1, 1), (Skill(0,0,0,"slash"), Skill(0,0,0,"slash"), Skill(0,0,0,"slash"))),
+        1: Character("Yisang", 159, 24, 0, assign_skillcycle(), 4, 8, Resistance(2, 0.5, 1), (Skill(4, 1, 7, "slash"), Skill(4, 2, 4, "pierce"), Skill(6, 3, 2, "slash"))),
+        2: Character("Faust", 186, 28, 0, assign_skillcycle(), 2, 4, Resistance(2, 0.5, 1), (Skill(4, 1, 7, "bash"), Skill(5, 2, 4, "bash"), Skill(7, 2, 2, "pierce"))),
+        3: Character("Don Quixote", 146, 29, 0, assign_skillcycle(), 3, 6, Resistance(1, 0.5, 2), (Skill(4, 1, 7, "pierce"), Skill(4, 1, 12, "pierce"), Skill(3, 3, 3, "pierce"))),
+        4: Character("Ryoshu", 146, 29, 0, assign_skillcycle(), 3, 6, Resistance(0.5, 1, 2), (Skill(4, 1, 7, "slash"), Skill(4, 2, 5, "slash"), Skill(5, 3, 3, "slash"))),
+        5: Character("Meursault", 199, 40, 0, assign_skillcycle(), 2, 3, Resistance(1, 2, 0.5), (Skill(3, 2, 4, "bash"), Skill(6, 1, 9, "bash"), Skill(4, 4, 2, "bash"))),
+        6: Character("Honglu", 146, 29, 0, assign_skillcycle(), 3, 6, Resistance(2, 1, 0.5), (Skill(4, 1, 7, "bash"), Skill(4, 2, 4, "slash"), Skill(6, 2, 4, "bash"))),
+        7: Character("Heathcliff", 171, 26, 0, assign_skillcycle(), 2, 5, Resistance(2, 1, 0.5), (Skill(4, 1, 7, "bash"), Skill(4, 2, 4, "bash"), Skill(4, 2, 8, "bash"))),
+        8: Character("Ishmael", 172, 50, 0, assign_skillcycle(), 5, 8, Resistance(2, 1, 0.5), (Skill(4, 1, 7, "bash"), Skill(6, 1, 9, "bash"), Skill(8, 1, 12, "bash"))),
+        9: Character("Rodion", 172, 26, 0, assign_skillcycle(), 2, 5, Resistance(0.5, 2, 1), (Skill(4, 1, 7, "slash"), Skill(4, 2, 4, "slash"), Skill(4, 4, 2, "slash"))),
+        10: Character("Sinclair", 132, 26, 0, assign_skillcycle(), 3, 7, Resistance(0.5, 2, 1), (Skill(4, 1, 7, "slash"), Skill(4, 3, 2, "slash"), Skill(5, 3, 3, "slash"))),
+        11: Character("Outis", 132, 26, 0, assign_skillcycle(), 3, 7, Resistance(0.5, 1, 2), (Skill(3, 3, 2, "pierce"), Skill(5, 2, 4, "slash"), Skill(7, 1, 14, "pierce"))),
+        12: Character("Gregor", 158, 47, 0, assign_skillcycle(), 3, 7, Resistance(1, 0.5, 2), (Skill(4, 1, 7, "slash"), Skill(5, 1, 10, "pierce"), Skill(6, 2, 4, "pierce"))),
     }
 
     character_list = [character_mapping.get(number, Character) for number in number_list]
@@ -297,7 +327,7 @@ def find_and_remove_action_by_att(defender):
     
     return found_action
 
-def damage(attacker, attack_skill, defender, coin_lost):
+def calculate_damage(attacker, attack_skill, defender, coin_lost):
     coin_count = attack_skill.coinnum
     coin_val = attack_skill.coinval
     coin_base = attack_skill.baseval
@@ -371,13 +401,13 @@ def clash(attacker, attack_skill, defender, defend_skill):
         attacker.sanity += san_heal
         print(f"{attacker.name} won the clash, restores {san_heal} sanity and starts attacking {defender.name}")
         time.sleep(0.5)
-        damage(attacker, attack_skill, defender, att_coin_lost)
+        calculate_damage(attacker, attack_skill, defender, att_coin_lost)
     if att_coin_count == att_coin_lost:
         san_heal = 10*(1+0.1*clash_num)
         defender.sanity += san_heal
         print(f"{defender.name} won the clash, restores {san_heal} sanity and starts attacking {attacker.name}")
         time.sleep(0.5)
-        damage(defender, defend_skill, attacker, defn_coin_lost)
+        calculate_damage(defender, defend_skill, attacker, defn_coin_lost)
 
 def main():
     # Get the player name and create a team of limbus ID to defend mephistopheles 
@@ -455,12 +485,8 @@ def main():
                 target_choice = get_player_target(attacking_character, enemy_characters)
                 target_character = enemy_characters[target_choice]
                 clash_opt = attacking_character.target(target_character, skill_choice)
-                skill = attacking_character.s1
-                if skill_choice == 2:
-                    skill = attacking_character.s2
-                elif skill_choice == 3:
-                    skill = attacking_character.s3
-                action = Action(attacking_character.sp, skill, attacking_character, target_character, clash_opt)
+                skill = attacking_character.skills[skill_choice - 1]
+                action = Action(attacking_character.speed, skill, attacking_character, target_character, clash_opt)
                 add_action(action)
             elif user_input == "1":
                 print_board(act, player_name, player_characters, enemy_name, enemy_characters)
@@ -491,12 +517,8 @@ def main():
                 target_choice = get_player_target(attacking_character, enemy_characters)
                 target_character = enemy_characters[target_choice]
                 clash_opt = attacking_character.target(target_character, skill_choice)
-                skill = attacking_character.s1
-                if skill_choice == 2:
-                    skill = attacking_character.s2
-                elif skill_choice == 3:
-                    skill = attacking_character.s3
-                action = Action(attacking_character.sp, skill, attacking_character, target_character, clash_opt)
+                skill = attacking_character.skills[skill_choice - 1]
+                action = Action(attacking_character.speed, skill, attacking_character, target_character, clash_opt)
                 add_action(action)
             elif user_input == "1":
                 print_board(act, player_name, player_characters, enemy_name, enemy_characters)
@@ -516,7 +538,7 @@ def main():
                     if attack_action.defn.is_alive():
                         print(f"{attack_action.att.name} is attacking {attack_action.defn.name} one-sided")
                         time.sleep(0.5)
-                        damage(attack_action.att, attack_action.skill, attack_action.defn, 0)
+                        calculate_damage(attack_action.att, attack_action.skill, attack_action.defn, 0)
                         time.sleep(0.5)
                     del action_list[0]
                 else:
@@ -528,7 +550,7 @@ def main():
                     elif defend_action.att.is_alive():
                         print(f"{attack_action.att.name} is attacking staggered {attack_action.defn.name}")
                         time.sleep(0.5)
-                        damage(attack_action.att, attack_action.skill, attack_action.defn, 0)
+                        calculate_damage(attack_action.att, attack_action.skill, attack_action.defn, 0)
                         time.sleep(0.5)
                     else:
                         print(f"{attack_action.defn.name} is already dead")
@@ -538,7 +560,7 @@ def main():
                 if attack_action.defn.is_alive():
                     print(f"{attack_action.att.name} is attacking {attack_action.defn.name} one-sided")
                     time.sleep(0.5)
-                    damage(attack_action.att, attack_action.skill, attack_action.defn, 0)
+                    calculate_damage(attack_action.att, attack_action.skill, attack_action.defn, 0)
                     time.sleep(0.5)
                 else:
                     print(f"{attack_action.defn.name} is already dead")
