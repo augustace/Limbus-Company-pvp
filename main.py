@@ -93,10 +93,10 @@ class Character:
         self.curhp -= damage
         if self.curstag != 0:
             self.curstag -= damage
-        if self.curstag < 0:
+        if self.curstag <= 0:
             self.curstag = 0
             self.stagger()
-        if self.curhp < 0:
+        if self.curhp <= 0:
             self.curhp = 0
             self.die()
 
