@@ -1,3 +1,4 @@
+from __future__ import annotations
 import random
 import sys
 import time
@@ -12,7 +13,7 @@ class SkillType(Enum):
     BASH = 3
     @staticmethod
     def from_str(typetext: str):
-        typetext = typetext.capitalize()
+        typetext = typetext.upper()
         if typetext == "SLASH":
             return SkillType.SLASH
         if typetext == "PIERCE":
@@ -20,6 +21,11 @@ class SkillType(Enum):
         if typetext == "BASH":
             return SkillType.BASH
         raise NameError
+
+class ActionType(Enum):
+    ONESIDE = 1
+    CLASH = 2   
+
 
 @dataclass(unsafe_hash=True)
 class Resistance:
@@ -71,8 +77,6 @@ class Character:
         print(f"{self.name} is dead!")
         self.deathtimer = 3
 
-
-
     def set_speed(self):
         self.speed = random.randint(self.spmin, self.spmax)
 
@@ -101,49 +105,48 @@ class Character:
             self.die()
 
     #Aim target of the action for the turn
-    def target(self, targ, skill_choice):
+    def target(self, targ: Character, skill_choice: int) -> ActionType:
         print(f"{self.name} targets {targ.name} with skill S{skill_choice} by speed of {self.speed}.")
         if targ.name == "Mephistopheles":
-            return 1
-        elif self.speed > targ.sp:
+            return ActionType.ONESIDE
+        if self.speed > targ.speed:
             if targ.is_stagger():
-                return 1
-            else:
-                print(f"{self.name} is faster than {targ.name}, you can choose to perform one-side attack or clash")
-                choice = 0
-                while True:
-                    try:
-                        choice = int(input("Enter 1 to perform one-side attack, 2 to match clash: "))
-                        if choice < 1 or choice > 2:
-                            print(f"Wrong input. Try again")
-                        else:
-                            break
-                    except ValueError:
-                        print("Invalid input. Please enter a valid integer.")
-                return choice
-        else:
-            return 1
+                return ActionType.ONESIDE
+            print(f"{self.name} is faster than {targ.name}, you can choose to perform one-side attack or clash")
+            choice = 0
+            while True:
+                try:
+                    choice = int(input("Enter 1 to perform one-side attack, 2 to match clash: "))
+                    if choice < 1 or choice > 2:
+                        print("Wrong input. Try again")
+                    else:
+                        break
+                except ValueError:
+                    print("Invalid input. Please enter a valid integer.")
+            if choice == 1:
+                return ActionType.ONESIDE
+            return ActionType.CLASH
+        return ActionType.ONESIDE
 
+@dataclass
 class Action:
-    def __init__(self, speed, skill, att, defn, act_type: str | SkillType):
+    def __init__(self, speed:int, skill:Skill, att:Character, defn:Character, act_type: ActionType):
         self.speed = speed
         self.skill = skill
         self.att = att
         self.defn = defn
-        self.act_type: SkillType
-        if isinstance(act_type, SkillType):
-            self.act_type = act_type
-        else:
-            self.act_type = SkillType.from_str(act_type)
-    def __repr__(self):
-        return f"Action(speed={self.speed}, skill='{self.skill.type}', attacker={self.att.name}, defender={self.defn.name}, type={self.act_type})"
+        self.act_type = act_type
 
 class Skill:
-    def __init__(self, baseval, coinnum, coinval, skill_type:SkillType):
+    def __init__(self, baseval, coinnum, coinval, skill_type:str | SkillType):
         self.baseval = baseval
         self.coinnum = coinnum
         self.coinval = coinval
-        self.type = skill_type
+        self.skill_type: SkillType
+        if isinstance(skill_type, str):
+            self.skill_type = SkillType.from_str(skill_type)
+        else:
+            self.skill_type = skill_type
 
 # Roll the skill cycle at the start of character init
 def assign_skillcycle():
@@ -151,15 +154,15 @@ def assign_skillcycle():
     random.shuffle(integer_list)
     return integer_list
 
-def get_player_input(characters):
+def get_player_input(characters: list[Character]):
     print("Choose which character to make an action:")
     for i, character in enumerate(characters, 1):
         if character.name == "Mephistopheles":
             continue
-        elif character.is_stagger():
+        if character.is_stagger():
             print(f"{i-1}. {character.name} is staggered")
         elif character.is_alive():
-            print(f"{i-1}. {character.name} (Speed: {character.sp})")
+            print(f"{i-1}. {character.name} (Speed: {character.speed})")
         else:
             print(f"{i-1}. {character.name} is dead (Timer: {character.deathtimer} turns)")
     choice = 0
@@ -167,26 +170,26 @@ def get_player_input(characters):
         try:
             choice = int(input("Enter the number of the character you want to attack with: "))
             if choice < 0 or choice > 3:
-                print(f"Wrong input. Try again")
+                print("Wrong input. Try again")
             elif not characters[choice].is_alive():
-                print(f"Invalid input. The character can't make an action")
+                print("Invalid input. The character can't make an action")
             elif characters[choice].is_stagger():
-                print(f"Invalid input. The character is staggered")                
+                print("Invalid input. The character is staggered")                
             elif choice == 0:
-                print(f"Invalid choice, Mephistopheles can't make an action")
+                print("Invalid choice, Mephistopheles can't make an action")
             else:
                 break
         except ValueError:
             print("Invalid input. Please enter a valid integer.")
     return choice
 
-def get_player_target(att_char, enemy_chars):
-    print(f"Choose which character for {att_char.name} to attack with speed of {att_char.sp}")
+def get_player_target(att_char: Character, enemy_chars: list[Character]):
+    print(f"Choose which character for {att_char.name} to attack with speed of {att_char.speed}")
     for i, character in enumerate(enemy_chars, 1):
         if character.name == "Mephistopheles":
             print(f"{i-1}. {character.name} (Health: {character.curhp})")
         elif character.is_alive():
-            print(f"{i-1}. {character.name} (Speed: {character.sp})")
+            print(f"{i-1}. {character.name} (Speed: {character.speed})")
         else:
             print(f"{i-1}. {character.name} is dead (Timer: {character.deathtimer} turns)")
     choice = 0
@@ -207,10 +210,10 @@ def get_skill_choice(character: Character) -> int:
     print(f"Which skill do you want {character.name} to use?")
     skillnum1:int = character.skillcycle[0]
     skill1 = character.skills[skillnum1 - 1]
-    print(f"1: S{skillnum1}, {skill1.baseval}+{skill1.coinval}*{skill1.coinnum}, Type: {skill1.type}")
+    print(f"1: S{skillnum1}, {skill1.baseval}+{skill1.coinval}*{skill1.coinnum}, Type: {skill1.skill_type}")
     skillnum2:int = character.skillcycle[1]
     skill2 = character.skills[skillnum2 - 1]
-    print(f"2: S{skillnum2}, {skill2.baseval}+{skill2.coinval}*{skill2.coinnum}, Type: {skill2.type}")
+    print(f"2: S{skillnum2}, {skill2.baseval}+{skill2.coinval}*{skill2.coinnum}, Type: {skill2.skill_type}")
     choice = 0
     while True:
         try:
@@ -226,27 +229,26 @@ def get_skill_choice(character: Character) -> int:
     else:
         return skillnum2
 
-def check_game_end(p1team, p1name, p2team, p2name):
+def check_game_end(p1team: list[Character], p1name: str, p2team: list[Character], p2name: str):
     if not p1team[0].is_alive:
         print(f"\n{p2name} wins!")
-        quit()
+        sys.exit()
     elif not p2team[0].is_alive:
         print(f"\n{p1name} wins!")
-        quit()
+        sys.exit()
 
-def get_valid_input(prompt, valid_choices):
+def get_valid_input(prompt, valid_choices: list[int]):
     while True:
         user_input = input(prompt)
         try:
             choice = int(user_input)
             if choice in valid_choices:
                 return choice
-            else:
-                print("Invalid choice. Please select a valid integer between 1 to 12.")
+            print("Invalid choice. Please select a valid integer between 1 to 12.")
         except ValueError:
             print("Invalid input. Please enter an integer.")
 
-def numbers_to_characters(number_list):
+def numbers_to_characters(number_list: list[int]):
     character_mapping = {
         0: Character("Mephistopheles", 50, 100, 0, assign_skillcycle(), 0, 0, Resistance(1, 1, 1), (Skill(0,0,0,"slash"), Skill(0,0,0,"slash"), Skill(0,0,0,"slash"))),
         1: Character("Yisang", 159, 24, 0, assign_skillcycle(), 4, 8, Resistance(2, 0.5, 1), (Skill(4, 1, 7, "slash"), Skill(4, 2, 4, "pierce"), Skill(6, 3, 2, "slash"))),
@@ -263,10 +265,10 @@ def numbers_to_characters(number_list):
         12: Character("Gregor", 158, 47, 0, assign_skillcycle(), 3, 7, Resistance(1, 0.5, 2), (Skill(4, 1, 7, "slash"), Skill(5, 1, 10, "pierce"), Skill(6, 2, 4, "pierce"))),
     }
 
-    character_list = [character_mapping.get(number, Character) for number in number_list]
+    character_list = [character_mapping[number] for number in number_list]
     return character_list
 
-def print_board(actnum, p1name, p1team, p2name, p2team):
+def print_board(actnum: int, p1name: str, p1team: list[Character], p2name: str, p2team: list[Character]):
     print("\n" + "=" * 40)
     print(f"Act {actnum}")
     print("=" * 10)
@@ -278,7 +280,7 @@ def print_board(actnum, p1name, p1team, p2name, p2team):
             if char.is_stagger():
                 print(f"{char.name} is staggered \n (Speed: 0, Sanity: {char.sanity}, Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})")
             else:
-                print(f"{char.name} \n (Speed: {char.sp}, Sanity: {char.sanity}, Skill: (S{char.skillcycle[0]}/S{char.skillcycle[1]}), Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})")
+                print(f"{char.name} \n (Speed: {char.speed}, Sanity: {char.sanity}, Skill: (S{char.skillcycle[0]}/S{char.skillcycle[1]}), Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})")
         else:
             print(f"{char.name} will revive in {char.deathtimer} acts. (Health: 0/{char.maxhp}) (Stagger: 0/{char.maxstag})")
     print("=" * 10)
@@ -290,14 +292,14 @@ def print_board(actnum, p1name, p1team, p2name, p2team):
             if char.is_stagger():
                 print(f"{char.name} is staggered \n (Speed: 0, Sanity: {char.sanity}, Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})")
             else:
-                print(f"{char.name} \n (Speed: {char.sp}, Sanity: {char.sanity}, Skill: (S{char.skillcycle[0]}/S{char.skillcycle[1]}), Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})")
+                print(f"{char.name} \n (Speed: {char.speed}, Sanity: {char.sanity}, Skill: (S{char.skillcycle[0]}/S{char.skillcycle[1]}), Stagger: {char.curstag}/{char.maxstag}, Health: {char.curhp}/{char.maxhp})")
         else:
             print(f"{char.name} will revive in {char.deathtimer} acts. (Health: 0/{char.maxhp}) (Stagger: 0/{char.maxstag})")
     print("=" * 40)
 
-action_list = []
+action_list: list[Action] = []
 
-def add_action(action):
+def add_action(action: Action):
     global action_list
     att_exists = False
 
@@ -335,7 +337,7 @@ def find_and_remove_action_by_att(defender):
     
     return found_action
 
-def calculate_damage(attacker, attack_skill, defender, coin_lost):
+def calculate_damage(attacker: Character, attack_skill: Skill, defender: Character, coin_lost: int):
     coin_count = attack_skill.coinnum
     coin_val = attack_skill.coinval
     coin_base = attack_skill.baseval
@@ -344,7 +346,7 @@ def calculate_damage(attacker, attack_skill, defender, coin_lost):
     coin_num = coin_lost
     while coin_count > coin_num:
         coin_num += 1
-        dmg_ratio = defender.find_mult(attack_skill.type)
+        dmg_ratio = defender.find_mult(attack_skill.skill_type)
         print(f"Toss the coin #{coin_num}")
         time.sleep(0.5)
         chance = random.randint(0,99)
@@ -362,9 +364,9 @@ def calculate_damage(attacker, attack_skill, defender, coin_lost):
             coin_count = 0
             if defender.name == "Mephistopheles":
                 print(f"Game is over.")
-                quit()
+                sys.exit()
 
-def clash(attacker, attack_skill, defender, defend_skill):
+def clash(attacker: Character, attack_skill: Skill, defender: Character, defend_skill: Skill):
     clash_num = 0
     att_coin_count = attack_skill.coinnum
     defn_coin_count = defend_skill.coinnum
@@ -373,7 +375,7 @@ def clash(attacker, attack_skill, defender, defend_skill):
     att_prob = attacker.sanity + 50
     defn_coin_val = defend_skill.coinval
     defn_coin_base = defend_skill.baseval
-    defn_prob = defender.sanity + 50    
+    defn_prob = defender.sanity + 50
     att_coin_lost = 0
     defn_coin_lost = 0
     while att_coin_count > att_coin_lost and defn_coin_count > defn_coin_lost:
