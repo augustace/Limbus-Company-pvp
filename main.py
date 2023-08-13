@@ -86,6 +86,10 @@ class Character:
     def is_stagger(self):
         return self.curstag < 1
 
+    def coin_toss(self) -> bool:
+        #True: head / False: tail
+        return random.randint(0,99) < 50 + self.sanity
+
     def next_turn(self):
         self.set_speed()
         if self.deathtimer > 0:
@@ -218,12 +222,99 @@ class Team:
 
 @dataclass
 class Action:
-    def __init__(self, speed:int, skill:Skill, att:Character, defn:Character, act_type: ActionType):
-        self.speed = speed
-        self.skill = skill
-        self.att = att
-        self.defn = defn
-        self.act_type = act_type
+    speed: int
+    skill: Skill
+    att: Character
+    defn: Character
+    act_type: ActionType
+
+    def _is_clash(self, defending_action: Action | None = None):
+        return self.act_type == ActionType.CLASH and defending_action is not None and not self.defn.is_stagger()
+
+    def battle(self, defending_action: Action | None = None):
+        assert defending_action is None or defending_action.att == self.defn
+        if not self.defn.is_alive():
+            return
+        if self._is_clash(defending_action):
+            self.clash(defending_action)
+            return
+        self.one_side_attack()
+
+    def one_side_attack(self, coin_lost:int=0):
+        coin_count = self.skill.coinnum
+        coin_val = self.skill.coinval
+        coin_base = self.skill.baseval
+        dmg_val = coin_base
+        coin_num = coin_lost
+        while coin_count > coin_num:
+            coin_num += 1
+            dmg_ratio = self.defn.find_mult(self.skill.skill_type)
+            print(f"Toss the coin #{coin_num}")
+            time.sleep(0.5)
+            if self.att.coin_toss():
+                print("Coin is on head")
+                dmg_val += coin_val
+            else:
+                print("Coin is on tail")
+            time.sleep(0.5)
+            damage = int(dmg_val * dmg_ratio)
+            print(f"{self.att.name} dealt {damage} damage to {self.defn.name}")
+            self.defn.take_damage(damage)
+            time.sleep(0.5)
+            if not self.defn.is_alive():
+                coin_count = 0
+                if isinstance(self.defn, BusCharacter):
+                    print("Game is over.")
+                    sys.exit()
+
+    def clash(self, defend_action: Action):
+        clash_num = 0
+        att_coin_count = self.skill.coinnum
+        defn_coin_count = defend_action.skill.coinnum
+        att_coin_val = self.skill.coinval
+        att_coin_base = self.skill.baseval
+        defn_coin_val = defend_action.skill.coinval
+        defn_coin_base = defend_action.skill.baseval
+        att_coin_lost = 0
+        defn_coin_lost = 0
+        while att_coin_count > att_coin_lost and defn_coin_count > defn_coin_lost:
+            clash_num += 1
+            att_val = att_coin_base
+            defn_val = defn_coin_base
+            att_coin_num = att_coin_lost
+            defn_coin_num = defn_coin_lost
+            while att_coin_count > att_coin_num:
+                att_coin_num += 1
+                if self.att.coin_toss():
+                    att_val += att_coin_val
+            while defn_coin_count > defn_coin_num:
+                defn_coin_num += 1
+                if self.defn.coin_toss():
+                    defn_val += defn_coin_val
+            if att_val > defn_val:
+                print(f"Clash #{clash_num}, {att_val}:{defn_val}. {self.defn.name} lost a coin.")
+                defn_coin_lost += 1
+                time.sleep(0.25)
+            elif defn_val > att_val:
+                print(f"Clash #{clash_num}, {att_val}:{defn_val}. {self.att.name} lost a coin.")
+                att_coin_lost += 1
+                time.sleep(0.25)
+            else:
+                print(f"Clash #{clash_num}, {att_val}:{defn_val}. It's even.")
+                time.sleep(0.25)
+                continue
+        if defn_coin_count == defn_coin_lost:
+            san_heal = 10+clash_num
+            self.att.sanity += san_heal
+            print(f"{self.att.name} won the clash, restores {san_heal} sanity and starts attacking {self.defn.name}")
+            time.sleep(0.5)
+            self.one_side_attack(att_coin_lost)
+        if att_coin_count == att_coin_lost:
+            san_heal = 10 + clash_num
+            self.defn.sanity += san_heal
+            print(f"{self.defn.name} won the clash, restores {san_heal} sanity and starts attacking {self.att.name}")
+            time.sleep(0.5)
+            defend_action.one_side_attack(defn_coin_lost)
 
 class Skill:
     def __init__(self, baseval, coinnum, coinval, skill_type:str | SkillType):
@@ -288,15 +379,6 @@ def numbers_to_characters(number_list: list[int]):
     character_list = [character_mapping[number] for number in number_list]
     return character_list
 
-def print_board(actnum: int, p1team: Team, p2team: Team):
-    print("\n" + "=" * 40)
-    print(f"Act {actnum}")
-    print("=" * 10)
-    print(p1team)
-    print("=" * 10)
-    print(p2team)
-    print("=" * 40)
-
 # action_list: list[Action] = []
 
 class ActionList:
@@ -337,88 +419,6 @@ class ActionList:
     
     def get_top_and_remove(self) -> Action:
         return self.action_list.pop(0)
-
-def one_side_attack(attacker: Character, attack_skill: Skill, defender: Character, coin_lost: int):
-    coin_count = attack_skill.coinnum
-    coin_val = attack_skill.coinval
-    coin_base = attack_skill.baseval
-    prob = attacker.sanity + 50
-    dmg_val = coin_base
-    coin_num = coin_lost
-    while coin_count > coin_num:
-        coin_num += 1
-        dmg_ratio = defender.find_mult(attack_skill.skill_type)
-        print(f"Toss the coin #{coin_num}")
-        time.sleep(0.5)
-        chance = random.randint(0,99)
-        if chance < prob:
-            print(f"Coin is on head")
-            dmg_val += coin_val
-        else:
-            print(f"Coin is on tail")
-        time.sleep(0.5)
-        damage = int(dmg_val * dmg_ratio)
-        print(f"{attacker.name} dealt {damage} damage to {defender.name}")
-        defender.take_damage(damage)
-        time.sleep(0.5)
-        if not defender.is_alive():
-            coin_count = 0
-            if isinstance(defender, BusCharacter):
-                print(f"Game is over.")
-                sys.exit()
-
-def clash(attacker: Character, attack_skill: Skill, defender: Character, defend_skill: Skill):
-    clash_num = 0
-    att_coin_count = attack_skill.coinnum
-    defn_coin_count = defend_skill.coinnum
-    att_coin_val = attack_skill.coinval
-    att_coin_base = attack_skill.baseval
-    att_prob = attacker.sanity + 50
-    defn_coin_val = defend_skill.coinval
-    defn_coin_base = defend_skill.baseval
-    defn_prob = defender.sanity + 50
-    att_coin_lost = 0
-    defn_coin_lost = 0
-    while att_coin_count > att_coin_lost and defn_coin_count > defn_coin_lost:
-        clash_num += 1
-        att_val = att_coin_base
-        defn_val = defn_coin_base
-        att_coin_num = att_coin_lost
-        defn_coin_num = defn_coin_lost
-        while att_coin_count > att_coin_num:
-            att_coin_num += 1
-            chance = random.randint(0,99)
-            if chance < att_prob:
-                att_val += att_coin_val
-        while defn_coin_count > defn_coin_num:
-            defn_coin_num += 1
-            chance = random.randint(0,99)
-            if chance < defn_prob:
-                defn_val += defn_coin_val
-        if att_val > defn_val:
-            print(f"Clash #{clash_num}, {att_val}:{defn_val}. {defender.name} lost a coin.")
-            defn_coin_lost += 1
-            time.sleep(0.25)
-        elif defn_val > att_val:
-            print(f"Clash #{clash_num}, {att_val}:{defn_val}. {attacker.name} lost a coin.")
-            att_coin_lost += 1
-            time.sleep(0.25)
-        else:
-            print(f"Clash #{clash_num}, {att_val}:{defn_val}. It's even.")
-            time.sleep(0.25)
-            continue
-    if defn_coin_count == defn_coin_lost:
-        san_heal = 10+clash_num
-        attacker.sanity += san_heal
-        print(f"{attacker.name} won the clash, restores {san_heal} sanity and starts attacking {defender.name}")
-        time.sleep(0.5)
-        one_side_attack(attacker, attack_skill, defender, att_coin_lost)
-    if att_coin_count == att_coin_lost:
-        san_heal = 10*(1+0.1*clash_num)
-        defender.sanity += san_heal
-        print(f"{defender.name} won the clash, restores {san_heal} sanity and starts attacking {attacker.name}")
-        time.sleep(0.5)
-        one_side_attack(defender, defend_skill, attacker, defn_coin_lost)
 
 class GameManager:
     def __init__(self, action_list: ActionList, team1:Team, team2:Team):
@@ -500,39 +500,32 @@ class GameManager:
         for character in chain(self.player.characters, self.enemy.characters):
             character.next_turn()
 
-    def perform_battle(self):
+    def resolve_action(self):
         while len(self.action_list) > 0:
             attack_action = self.action_list.get_top_and_remove()
+            defend_action = None
             if attack_action.act_type == ActionType.CLASH:
                 defend_action = self.action_list.find_and_remove_action_by_att(attack_action.defn)
                 if defend_action is None:
                     if attack_action.defn.is_alive():
                         print(f"{attack_action.att.name} is attacking {attack_action.defn.name} one-sided")
                         time.sleep(0.5)
-                        one_side_attack(attack_action.att, attack_action.skill, attack_action.defn, 0)
-                        time.sleep(0.5)
                 else:
                     print(f"{attack_action.att.name} begin clash against {attack_action.defn.name}")
                     time.sleep(0.5)
-                    if not defend_action.att.is_stagger():
-                        clash(attack_action.att, attack_action.skill, defend_action.att, defend_action.skill)
-                        time.sleep(0.5)
-                    elif defend_action.att.is_alive():
-                        print(f"{attack_action.att.name} is attacking staggered {attack_action.defn.name}")
-                        time.sleep(0.5)
-                        one_side_attack(attack_action.att, attack_action.skill, attack_action.defn, 0)
-                        time.sleep(0.5)
-                    else:
+                    if not defend_action.att.is_alive():
                         print(f"{attack_action.defn.name} is already dead")
+                        time.sleep(0.5)
+                    elif defend_action.att.is_stagger():
+                        print(f"{attack_action.att.name} is attacking staggered {attack_action.defn.name}")
                         time.sleep(0.5)
             else:
                 if attack_action.defn.is_alive():
                     print(f"{attack_action.att.name} is attacking {attack_action.defn.name} one-sided")
                     time.sleep(0.5)
-                    one_side_attack(attack_action.att, attack_action.skill, attack_action.defn, 0)
-                    time.sleep(0.5)
                 else:
                     print(f"{attack_action.defn.name} is already dead")
+            attack_action.battle(defend_action)
 
 def main():
     # Get the player name and create a team of limbus ID to defend mephistopheles 
@@ -572,7 +565,7 @@ def main():
         manager.change_side()
 
         # Start the battle phase
-        manager.perform_battle()
+        manager.resolve_action()
 
 if __name__ == "__main__":
     main()
