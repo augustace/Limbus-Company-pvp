@@ -140,11 +140,54 @@ class Character:
         return ActionType.ONESIDE
     
     def __repr__(self) -> str:
-        if self.is_alive():
-            if self.is_stagger():
-                return f"{self.name} is staggered \n (Speed: 0, Sanity: {self.sanity}, Stagger: {self.curstag}/{self.maxstag}, Health: {self.curhp}/{self.maxhp})"
-            return f"{self.name} \n (Speed: {self.speed}, Sanity: {self.sanity}, Skill: (S{self.skillcycle[0]}/S{self.skillcycle[1]}), Stagger: {self.curstag}/{self.maxstag}, Health: {self.curhp}/{self.maxhp})"
-        return f"{self.name} will revive in {self.deathtimer} acts. (Health: 0/{self.maxhp}) (Stagger: 0/{self.maxstag})"
+        if not self.is_alive():
+            return f"{self.name} will revive in {self.deathtimer} acts. (Health: 0/{self.maxhp}) (Stagger: 0/{self.maxstag})"
+        if self.is_stagger():
+            return f"{self.name} is staggered \n (Speed: 0, Sanity: {self.sanity}, Stagger: {self.curstag}/{self.maxstag}, Health: {self.curhp}/{self.maxhp})"
+        return f"{self.name} \n (Speed: {self.speed}, Sanity: {self.sanity}, Skill: (S{self.skillcycle[0]}/S{self.skillcycle[1]}), Stagger: {self.curstag}/{self.maxstag}, Health: {self.curhp}/{self.maxhp})"
+
+    
+    def basic_info(self) -> str:
+        if not self.is_alive():
+            return f"{self.name} is dead (Timer: {self.deathtimer} turns)"
+        if self.is_stagger():
+            return f"{self.name} is staggered"
+        return f"{self.name} (Speed: {self.speed})"
+
+    def user_select_skill(self) -> int:
+        print(f"Which skill do you want {self.name} to use?")
+        print(f"1: S{self.skillcycle[0]}, {self.skills[self.skillcycle[0] - 1]}")
+        print(f"2: S{self.skillcycle[1]}, {self.skills[self.skillcycle[1] - 1]}")
+        choice = 0
+        while True:
+            try:
+                choice = int(input("Enter the number of the skill slot you want to use: "))
+                if choice < 1 or choice > 2:
+                    print("Wrong input. Try again")
+                else:
+                    break
+            except ValueError:
+                print("Invalid input. Please enter a valid integer.")
+        return self.skillcycle[choice - 1]
+
+    def user_select_target(self, enemy_team: Team) -> int:
+        print(f"Choose which character for {self.name} to attack with speed of {self.speed}")
+        enemy_chars = enemy_team.characters
+        for i, character in enumerate(enemy_chars, 1):
+            print(f"{i - 1}. {character.basic_info()}")
+        choice = 0
+        while True:
+            try:
+                choice = int(input("Enter the number of the character you want to attack: "))
+                if choice < 0 or choice > 3:
+                    print("Wrong input. Try again")
+                elif not enemy_chars[choice].is_alive():
+                    print("Invalid input. The target character is dead")
+                else:
+                    break
+            except ValueError:
+                print("Invalid input. Please enter a valid integer.")
+        return choice
     
 class BusCharacter(Character):
     def __init__(self):
@@ -155,6 +198,9 @@ class BusCharacter(Character):
 
     def __repr__(self) -> str:
         return f"{self.name} (Health: {self.curhp}/{self.maxhp})"
+
+    def basic_info(self) -> str:
+        return f"{self.name} (Health: {self.curhp})"
     
 class Team:
     def __init__(self, name: str, characters: list[Character]):
@@ -190,86 +236,18 @@ class Skill:
         else:
             self.skill_type = skill_type
 
+    def __repr__(self):
+        return f"{self.baseval}+{self.coinval}*{self.coinnum}, Type: {self.skill_type.name}"
+
 # Roll the skill cycle at the start of character init
 def assign_skillcycle():
     integer_list = [1, 1, 1, 2, 2, 3]
     random.shuffle(integer_list)
     return integer_list
 
-def get_player_input(characters: list[Character]):
-    print("Choose which character to make an action:")
-    for i, character in enumerate(characters, 1):
-        if isinstance(character, BusCharacter):
-            continue
-        if character.is_stagger():
-            print(f"{i-1}. {character.name} is staggered")
-        elif character.is_alive():
-            print(f"{i-1}. {character.name} (Speed: {character.speed})")
-        else:
-            print(f"{i-1}. {character.name} is dead (Timer: {character.deathtimer} turns)")
-    choice = 0
-    while True:
-        try:
-            choice = int(input("Enter the number of the character you want to attack with: "))
-            if choice < 0 or choice > 3:
-                print("Wrong input. Try again")
-            elif not characters[choice].is_alive():
-                print("Invalid input. The character can't make an action")
-            elif characters[choice].is_stagger():
-                print("Invalid input. The character is staggered")
-            elif choice == 0:
-                print("Invalid choice, Mephistopheles can't make an action")
-            else:
-                break
-        except ValueError:
-            print("Invalid input. Please enter a valid integer.")
-    return choice
 
-def get_player_target(att_char: Character, enemy_chars: list[Character]):
-    print(f"Choose which character for {att_char.name} to attack with speed of {att_char.speed}")
-    for i, character in enumerate(enemy_chars, 1):
-        if isinstance(character, BusCharacter):
-            print(f"{i-1}. {character.name} (Health: {character.curhp})")
-        elif character.is_alive():
-            print(f"{i-1}. {character.name} (Speed: {character.speed})")
-        else:
-            print(f"{i-1}. {character.name} is dead (Timer: {character.deathtimer} turns)")
-    choice = 0
-    while True:
-        try:
-            choice = int(input("Enter the number of the character you want to attack: "))
-            if choice < 0 or choice > 3:
-                print(f"Wrong input. Try again")
-            elif not enemy_chars[choice].is_alive():
-                print(f"Invalid input. The target character is dead")
-            else:
-                break
-        except ValueError:
-            print("Invalid input. Please enter a valid integer.")
-    return choice
 
-def get_skill_choice(character: Character) -> int:
-    print(f"Which skill do you want {character.name} to use?")
-    skillnum1:int = character.skillcycle[0]
-    skill1 = character.skills[skillnum1 - 1]
-    print(f"1: S{skillnum1}, {skill1.baseval}+{skill1.coinval}*{skill1.coinnum}, Type: {skill1.skill_type}")
-    skillnum2:int = character.skillcycle[1]
-    skill2 = character.skills[skillnum2 - 1]
-    print(f"2: S{skillnum2}, {skill2.baseval}+{skill2.coinval}*{skill2.coinnum}, Type: {skill2.skill_type}")
-    choice = 0
-    while True:
-        try:
-            choice = int(input("Enter the number of the skill slot you want to use: "))
-            if choice < 1 or choice > 2:
-                print(f"Wrong input. Try again")
-            else:
-                break
-        except ValueError:
-            print("Invalid input. Please enter a valid integer.")
-    if choice == 1:
-        return skillnum1
-    else:
-        return skillnum2
+
 
 def check_game_end(p1team: list[Character], p1name: str, p2team: list[Character], p2name: str):
     if not p1team[0].is_alive:
@@ -319,47 +297,48 @@ def print_board(actnum: int, p1team: Team, p2team: Team):
     print(p2team)
     print("=" * 40)
 
-action_list: list[Action] = []
+# action_list: list[Action] = []
 
-def add_action(action: Action):
-    global action_list
-    att_exists = False
+class ActionList:
+    def __init__(self):
+        self.action_list: list[Action] = []
 
-    # Check if there's an element with the same att
-    for i, existing_action in enumerate(action_list):
-        if existing_action.att.name == action.att.name:
-            action_list[i] = action  # Replace existing action with the new one
-            att_exists = True
-            break
+    def add_action(self, action: Action):
+        # Check if there's an element with the same att
+        for i, existing_action in enumerate(self.action_list):
+            if existing_action.att.name == action.att.name:
+                self.action_list[i] = action  # Replace existing action with the new one
+                return
 
-    # If no existing att, find the correct position based on speed and insert
-    if not att_exists:
-        added = False
-        for i, existing_action in enumerate(action_list):
+        # If no existing att, find the correct position based on speed and insert
+        for i, existing_action in enumerate(self.action_list):
             if action.speed > existing_action.speed:
-                action_list.insert(i, action)
-                added = True
+                self.action_list.insert(i, action)
                 break
-        if not added:
-            action_list.append(action)
+        else:
+            self.action_list.append(action)
 
-def remove_all_actions():
-    global action_list
-    action_list = []
+    def remove_all_actions(self):
+        self.action_list = []
 
-def find_and_remove_action_by_att(defender: Character):
-    global action_list
-    found_action = None
+    def find_and_remove_action_by_att(self, defender: Character):
+        found_action = None
+
+        for i, action in enumerate(self.action_list):
+            if action.att.name == defender.name:
+                found_action = action
+                del self.action_list[i]
+                return found_action
+
+        return None
     
-    for i, action in enumerate(action_list):
-        if action.att.name == defender.name:
-            found_action = action
-            del action_list[i]
-            break
+    def __len__(self) -> int:
+        return len(self.action_list)
     
-    return found_action
+    def get_top_and_remove(self) -> Action:
+        return self.action_list.pop(0)
 
-def calculate_damage(attacker: Character, attack_skill: Skill, defender: Character, coin_lost: int):
+def one_side_attack(attacker: Character, attack_skill: Skill, defender: Character, coin_lost: int):
     coin_count = attack_skill.coinnum
     coin_val = attack_skill.coinval
     coin_base = attack_skill.baseval
@@ -433,38 +412,127 @@ def clash(attacker: Character, attack_skill: Skill, defender: Character, defend_
         attacker.sanity += san_heal
         print(f"{attacker.name} won the clash, restores {san_heal} sanity and starts attacking {defender.name}")
         time.sleep(0.5)
-        calculate_damage(attacker, attack_skill, defender, att_coin_lost)
+        one_side_attack(attacker, attack_skill, defender, att_coin_lost)
     if att_coin_count == att_coin_lost:
         san_heal = 10*(1+0.1*clash_num)
         defender.sanity += san_heal
         print(f"{defender.name} won the clash, restores {san_heal} sanity and starts attacking {attacker.name}")
         time.sleep(0.5)
-        calculate_damage(defender, defend_skill, attacker, defn_coin_lost)
+        one_side_attack(defender, defend_skill, attacker, defn_coin_lost)
 
-def turn_action(act: int, player: Team, enemy: Team):
-    print_board(act, player, enemy)
-    print(f"{player.name}, it's your turn.")
-    turn_end = False
-    while not turn_end:
-        user_input = input("What do you want to do? Press 0 to make action, 1 to see the board, 2 to end turn, q to quit the game: ")
-        if user_input == "0":
-            player_choice = get_player_input(player.characters)
-            attacking_character = player.characters[player_choice]
-            skill_choice = get_skill_choice(attacking_character)
-            target_choice = get_player_target(attacking_character, enemy.characters)
-            target_character = enemy.characters[target_choice]
-            clash_opt = attacking_character.target(target_character, skill_choice)
-            skill = attacking_character.skills[skill_choice - 1]
-            action = Action(attacking_character.speed, skill, attacking_character, target_character, clash_opt)
-            add_action(action)
-        elif user_input == "1":
-            print_board(act, player, enemy)
-        elif user_input == "2":
-            turn_end = True
-        elif user_input == "q":
-            sys.exit()
-        else:
-            print("Invalid Input")
+class GameManager:
+    def __init__(self, action_list: ActionList, team1:Team, team2:Team):
+        self.action_list = action_list
+        self.player = team1
+        self.enemy = team2
+        self.act:int = 0
+
+    def __repr__(self) -> str:
+        ret_str = "=" * 40
+        ret_str += f"\nAct {self.act}"
+        ret_str += "\n" + "=" * 10
+        ret_str += f"\n{self.player}"
+        ret_str += "\n" + "=" * 10
+        ret_str += f"\n{self.enemy}"
+        ret_str += "\n" + "=" * 40
+        return ret_str
+
+    def change_side(self):
+        self.player, self.enemy = self.enemy, self.player
+
+    def _user_select_character(self) -> int:
+        print("Choose which character to make an action:")
+        characters = self.player.characters
+        for i, character in enumerate(characters, 1):
+            if isinstance(character, BusCharacter):
+                continue
+            print(f"{i - 1}. {character.basic_info()}")
+        choice = 0
+        while True:
+            try:
+                choice = int(input("Enter the number of the character you want to attack with: "))
+                if choice < 0 or choice > 3:
+                    print("Wrong input. Try again")
+                elif not characters[choice].is_alive():
+                    print("Invalid input. The character can't make an action")
+                elif characters[choice].is_stagger():
+                    print("Invalid input. The character is staggered")
+                elif choice == 0:
+                    print("Invalid choice, Mephistopheles can't make an action")
+                else:
+                    break
+            except ValueError:
+                print("Invalid input. Please enter a valid integer.")
+        return choice
+
+    def _user_make_action(self):
+        character_choice = self._user_select_character()
+        attacking_character = self.player.characters[character_choice]
+    
+        skill_choice = attacking_character.user_select_skill()
+    
+        target_choice = attacking_character.user_select_target(self.enemy)
+        target_character = self.enemy.characters[target_choice]
+    
+        clash_opt = attacking_character.target(target_character, skill_choice)
+        skill = attacking_character.skills[skill_choice - 1]
+        action = Action(attacking_character.speed, skill, attacking_character, target_character, clash_opt)
+        self.action_list.add_action(action)
+
+    def user_turn(self):
+        print(self)
+        print(f"{self.player.name}, it's your turn.")
+        while True:
+            user_input = input("What do you want to do? Press 0 to make action, 1 to see the board, 2 to end turn, q to quit the game: ")
+            if user_input == "0":
+                self._user_make_action()
+            elif user_input == "1":
+                print(self)
+            elif user_input == "2":
+                break
+            elif user_input == "q":
+                sys.exit()
+            else:
+                print("Invalid Input")
+
+    def next_turn(self):
+        self.act += 1
+        for character in chain(self.player.characters, self.enemy.characters):
+            character.next_turn()
+
+    def perform_battle(self):
+        while len(self.action_list) > 0:
+            attack_action = self.action_list.get_top_and_remove()
+            if attack_action.act_type == ActionType.CLASH:
+                defend_action = self.action_list.find_and_remove_action_by_att(attack_action.defn)
+                if defend_action is None:
+                    if attack_action.defn.is_alive():
+                        print(f"{attack_action.att.name} is attacking {attack_action.defn.name} one-sided")
+                        time.sleep(0.5)
+                        one_side_attack(attack_action.att, attack_action.skill, attack_action.defn, 0)
+                        time.sleep(0.5)
+                else:
+                    print(f"{attack_action.att.name} begin clash against {attack_action.defn.name}")
+                    time.sleep(0.5)
+                    if not defend_action.att.is_stagger():
+                        clash(attack_action.att, attack_action.skill, defend_action.att, defend_action.skill)
+                        time.sleep(0.5)
+                    elif defend_action.att.is_alive():
+                        print(f"{attack_action.att.name} is attacking staggered {attack_action.defn.name}")
+                        time.sleep(0.5)
+                        one_side_attack(attack_action.att, attack_action.skill, attack_action.defn, 0)
+                        time.sleep(0.5)
+                    else:
+                        print(f"{attack_action.defn.name} is already dead")
+                        time.sleep(0.5)
+            else:
+                if attack_action.defn.is_alive():
+                    print(f"{attack_action.att.name} is attacking {attack_action.defn.name} one-sided")
+                    time.sleep(0.5)
+                    one_side_attack(attack_action.att, attack_action.skill, attack_action.defn, 0)
+                    time.sleep(0.5)
+                else:
+                    print(f"{attack_action.defn.name} is already dead")
 
 def main():
     # Get the player name and create a team of limbus ID to defend mephistopheles 
@@ -490,55 +558,21 @@ def main():
     list2 = [0, chosen_numbers[1], chosen_numbers[2], chosen_numbers[5]]
     p1team = Team(p1name, numbers_to_characters(list1))
     p2team = Team(p2name, numbers_to_characters(list2))
-    
-    act = 0
-    current_player = 1
+
+    manager = GameManager(ActionList(), p1team, p2team)
+
     while True:
-        act += 1
-        for character in chain(p1team.characters, p2team.characters):
-            character.next_turn()
         #Reduce death timer and bring back alive
+        manager.next_turn()
 
         # Get player input and perform the attack
-        turn_action(act, p1team, p2team)
-        turn_action(act, p2team, p1team)
+        manager.user_turn()
+        manager.change_side()
+        manager.user_turn()
+        manager.change_side()
 
         # Start the battle phase
-        while len(action_list) > 0:
-            attack_action = action_list[0]
-            if attack_action.act_type == ActionType.CLASH:
-                defend_action = find_and_remove_action_by_att(attack_action.defn)
-                if defend_action is None:
-                    if attack_action.defn.is_alive():
-                        print(f"{attack_action.att.name} is attacking {attack_action.defn.name} one-sided")
-                        time.sleep(0.5)
-                        calculate_damage(attack_action.att, attack_action.skill, attack_action.defn, 0)
-                        time.sleep(0.5)
-                    del action_list[0]
-                else:
-                    print(f"{attack_action.att.name} begin clash against {attack_action.defn.name}")
-                    time.sleep(0.5)
-                    if not defend_action.att.is_stagger():
-                        clash(attack_action.att, attack_action.skill, defend_action.att, defend_action.skill)
-                        time.sleep(0.5)
-                    elif defend_action.att.is_alive():
-                        print(f"{attack_action.att.name} is attacking staggered {attack_action.defn.name}")
-                        time.sleep(0.5)
-                        calculate_damage(attack_action.att, attack_action.skill, attack_action.defn, 0)
-                        time.sleep(0.5)
-                    else:
-                        print(f"{attack_action.defn.name} is already dead")
-                        time.sleep(0.5)
-                    del action_list[0]
-            else:
-                if attack_action.defn.is_alive():
-                    print(f"{attack_action.att.name} is attacking {attack_action.defn.name} one-sided")
-                    time.sleep(0.5)
-                    calculate_damage(attack_action.att, attack_action.skill, attack_action.defn, 0)
-                    time.sleep(0.5)
-                else:
-                    print(f"{attack_action.defn.name} is already dead")
-                del action_list[0]
+        manager.perform_battle()
 
 if __name__ == "__main__":
     main()
