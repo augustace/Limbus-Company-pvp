@@ -94,12 +94,12 @@ class Character:
         self.set_speed()
         if self.deathtimer > 0:
             self.deathtimer -= 1
-        if self.deathtimer == 0:
-            self.curhp = self.maxhp
+            if self.deathtimer == 0:
+                self.curhp = self.maxhp
         if self.staggertimer > 0:
             self.staggertimer -= 1
-        if self.staggertimer == 0:
-            self.curstag = self.maxstag
+            if self.staggertimer == 0:
+                self.curstag = self.maxstag
     
     #Damage multiplier
     def find_mult(self, skill_type:SkillType) -> float:
@@ -110,14 +110,16 @@ class Character:
     #Taking one direction damage
     def take_damage(self, damage: int):
         self.curhp -= damage
-        if self.curstag != 0:
+        if self.curstag > 0:
             self.curstag -= damage
         if self.curstag <= 0:
             self.curstag = 0
-            self.stagger()
+            if self.staggertimer == 0:
+                self.stagger()
         if self.curhp <= 0:
             self.curhp = 0
-            self.die()
+            if self.deathtimer == 0:
+                self.die()
 
     #Aim target of the action for the turn
     def target(self, targ: Character, skill_choice: int) -> ActionType:
@@ -147,7 +149,7 @@ class Character:
         if not self.is_alive():
             return f"{self.name} will revive in {self.deathtimer} acts. (Health: 0/{self.maxhp}) (Stagger: 0/{self.maxstag})"
         if self.is_stagger():
-            return f"{self.name} is staggered \n (Speed: 0, Sanity: {self.sanity}, Stagger: {self.curstag}/{self.maxstag}, Health: {self.curhp}/{self.maxhp})"
+            return f"{self.name} is staggered \n (Speed: 0, Sanity: {self.sanity}, Stagger: 0/{self.maxstag}, Health: {self.curhp}/{self.maxhp})"
         return f"{self.name} \n (Speed: {self.speed}, Sanity: {self.sanity}, Skill: (S{self.skillcycle[0]}/S{self.skillcycle[1]}), Stagger: {self.curstag}/{self.maxstag}, Health: {self.curhp}/{self.maxhp})"
 
     
@@ -215,7 +217,7 @@ class Team:
         ret_str = f"{self.name}'s Team"
         for char in self.characters:
             if isinstance(char, BusCharacter):
-                ret_str += f"\n{self.name}'s {char})"
+                ret_str += f"\n{self.name}'s {char}"
             else:
                 ret_str += f"\n{char}"
         return ret_str
@@ -310,7 +312,7 @@ class Action:
             time.sleep(0.5)
             self.one_side_attack(att_coin_lost)
         if att_coin_count == att_coin_lost:
-            san_heal = 10 + clash_num
+            san_heal = 10+clash_num
             self.defn.sanity += san_heal
             print(f"{self.defn.name} won the clash, restores {san_heal} sanity and starts attacking {self.att.name}")
             time.sleep(0.5)
