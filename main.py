@@ -237,7 +237,7 @@ class Action:
         assert defending_action is None or defending_action.att == self.defn
         if not self.defn.is_alive():
             return
-        if self._is_clash(defending_action):
+        if defending_action != None:
             self.clash(defending_action)
             return
         self.one_side_attack()
@@ -405,6 +405,16 @@ class ActionList:
     def remove_all_actions(self):
         self.action_list = []
 
+    def find_action_of_target(self, defender: Character):
+        found_action = None
+        for i, action in enumerate(self.action_list):
+            if action.att.name == defender.name:
+                found_action = action
+                return found_action
+        return None
+
+
+
     def find_and_remove_action_by_att(self, defender: Character):
         found_action = None
 
@@ -506,6 +516,12 @@ class GameManager:
         while len(self.action_list) > 0:
             attack_action = self.action_list.get_top_and_remove()
             defend_action = None
+            action = self.action_list.find_action_of_target(attack_action.defn)
+            if action != None:
+                if action.speed == attack_action.speed:
+                    if action.defn == attack_action.att:
+                        print(f"{attack_action.att.name} begin clash against {attack_action.defn.name}")
+                        defend_action = self.action_list.find_and_remove_action_by_att(attack_action.defn)
             if attack_action.act_type == ActionType.CLASH:
                 defend_action = self.action_list.find_and_remove_action_by_att(attack_action.defn)
                 if defend_action is None:
@@ -521,7 +537,7 @@ class GameManager:
                     elif defend_action.att.is_stagger():
                         print(f"{attack_action.att.name} is attacking staggered {attack_action.defn.name}")
                         time.sleep(0.5)
-            else:
+            if action == None:
                 if attack_action.defn.is_alive():
                     print(f"{attack_action.att.name} is attacking {attack_action.defn.name} one-sided")
                     time.sleep(0.5)
